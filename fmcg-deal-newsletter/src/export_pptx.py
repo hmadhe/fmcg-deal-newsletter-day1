@@ -6,8 +6,10 @@ import os
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE
 
 BRAND_COLOR = RGBColor(0x1F, 0x4E, 0x79)
+BADGE_COLOR = RGBColor(0xC9, 0xDA, 0xEE)
 BLANK_LAYOUT_INDEX = 6
 
 
@@ -42,17 +44,36 @@ def _add_slide_heading(slide, text):
 
 def _add_title_slide(prs, newsletter):
     slide = prs.slides.add_slide(prs.slide_layouts[BLANK_LAYOUT_INDEX])
-    tb = slide.shapes.add_textbox(Inches(0.8), Inches(2.3), Inches(11.7), Inches(2))
+
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = BRAND_COLOR
+    bg.line.fill.background()
+    bg.shadow.inherit = False
+    spTree = slide.shapes._spTree
+    spTree.remove(bg._element)
+    spTree.insert(2, bg._element)  # send behind any later shapes
+
+    badge = slide.shapes.add_textbox(Inches(0.8), Inches(2.0), Inches(8), Inches(0.5))
+    badge.text_frame.text = newsletter["period"].upper()
+    badge.text_frame.paragraphs[0].font.size = Pt(14)
+    badge.text_frame.paragraphs[0].font.bold = True
+    badge.text_frame.paragraphs[0].font.color.rgb = BADGE_COLOR
+
+    tb = slide.shapes.add_textbox(Inches(0.8), Inches(2.5), Inches(11.7), Inches(1.6))
     tf = tb.text_frame
     tf.word_wrap = True
     tf.text = newsletter["title"]
     tf.paragraphs[0].font.size = Pt(40)
     tf.paragraphs[0].font.bold = True
-    tf.paragraphs[0].font.color.rgb = BRAND_COLOR
+    tf.paragraphs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
-    sub = slide.shapes.add_textbox(Inches(0.8), Inches(3.8), Inches(11.7), Inches(1))
-    sub.text_frame.text = f"{newsletter['period']}   |   Generated {newsletter['generated_on']}"
-    sub.text_frame.paragraphs[0].font.size = Pt(18)
+    sub = slide.shapes.add_textbox(Inches(0.8), Inches(4.0), Inches(11.7), Inches(1))
+    sub.text_frame.text = (
+        f"Generated {newsletter['generated_on']}  |  {newsletter['total_deals_found']} deals tracked this period"
+    )
+    sub.text_frame.paragraphs[0].font.size = Pt(16)
+    sub.text_frame.paragraphs[0].font.color.rgb = BADGE_COLOR
 
 
 def _add_summary_slide(prs, newsletter):
@@ -89,10 +110,12 @@ def _add_deal_slide(prs, deal):
     p2.font.size = Pt(18)
 
     p3 = tf.add_paragraph()
-    src_text = f"Source: {deal['source']}"
-    if deal.get("also_covered_by"):
-        src_text += f" (also: {', '.join(deal['also_covered_by'])})"
-    p3.text = src_text
+    n = deal["corroboration_count"]
+    p3.text = (
+        f"Deal ID: {deal['deal_id']}  |  Sources: {', '.join(deal['sources'])}  |  "
+        f"Corroboration: {n} independent source{'s' if n != 1 else ''}  |  "
+        f"Confidence: {deal['confidence']}"
+    )
     p3.font.size = Pt(12)
     p3.font.italic = True
 
@@ -106,7 +129,10 @@ def _add_other_deals_slide(prs, other_deals):
     tf.word_wrap = True
     for i, deal in enumerate(other_deals):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.text = f"\u2022 {deal['acquirer']} \u2192 {deal['target']}: {deal['summary']} ({deal['source']})"
+        p.text = (
+            f"\u2022 {deal['acquirer']} \u2192 {deal['target']}: {deal['summary']} "
+            f"({', '.join(deal['sources'])})"
+        )
         p.font.size = Pt(16)
 
 

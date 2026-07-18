@@ -51,6 +51,93 @@ def build_deal_cards(enriched_articles):
     return cards
 
 
+def _normalize_name(name):
+    if not name:
+        return None
+    name = name.strip().lower()
+    return name if name and name != "not specified" else None
+
+
+def merge_duplicate_deals(cards):
+    """
+    Multiple outlets often cover the same underlying deal under very
+    different headlines ("CMA reviews Danone-Huel deal" vs "Competition
+    watchdog probes Danone's Huel takeover") -- too different in wording to
+    be caught by dedup.py's fuzzy title match, so they survive as separate
+    cards. Stage 4 already extracts a structured acquirer/target per
+    article, so group on that instead: cards agreeing on the same
+    (acquirer, target) pair are the same deal and get merged into one
+    record with every source listed, rather than shown twice.
+
+    Cards where either side wasn't extracted (acquirer or target is
+    "Not specified") are left standalone rather than merged -- grouping two
+    unrelated deals just because both failed extraction would be worse
+    than not merging at all.
+
+    Confidence is a simple, stated rule, not a model output:
+      - 2+ independent sources           -> High
+      - 1 source, but a deal value stated -> Medium
+      - 1 source, no deal value            -> Low
+    """
+    groups = {}
+    order = []
+    for card in cards:
+        key = (_normalize_name(card["acquirer"]), _normalize_name(card["target"]))
+        if key[0] is None or key[1] is None:
+            key = ("__standalone__", id(card))
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(card)
+
+    merged = []
+    for key in order:
+        group = groups[key]
+        group.sort(key=lambda c: c["combined_score"], reverse=True)
+        primary = group[0]
+
+        deal_value = next(
+            (c["deal_value"] for c in group if c["deal_value"] not in (None, "Undisclosed")),
+            primary["deal_value"],
+        )
+
+        sources = []
+        for c in group:
+            if c["source"] not in sources:
+                sources.append(c["source"])
+            for extra in c.get("also_covered_by", []):
+                if extra not in sources:
+                    sources.append(extra)
+
+        if len(sources) >= 2:
+            confidence = "High"
+        elif deal_value not in (None, "Undisclosed"):
+            confidence = "Medium"
+        else:
+            confidence = "Low"
+
+        merged.append({
+            "headline": primary["headline"],
+            "acquirer": primary["acquirer"],
+            "target": primary["target"],
+            "deal_type": primary["deal_type"],
+            "deal_value": deal_value,
+            "summary": primary["summary"],
+            "sources": sources,
+            "corroboration_count": len(sources),
+            "confidence": confidence,
+            "url": primary["url"],
+            "published": primary["published"],
+            "combined_score": max(c["combined_score"] for c in group),
+        })
+
+    merged.sort(key=lambda c: c["combined_score"], reverse=True)
+    for i, deal in enumerate(merged, 1):
+        deal["deal_id"] = f"D{i:03d}"
+
+    return merged
+
+
 def generate_executive_summary(deal_cards):
     if not deal_cards:
         return "No qualifying FMCG deal activity was found in this period."
@@ -76,7 +163,7 @@ def generate_executive_summary(deal_cards):
 def build_newsletter(enriched_articles):
     """Returns a structured newsletter dict, ready for docx/pptx rendering."""
     deal_cards = build_deal_cards(enriched_articles)
-    deal_cards.sort(key=lambda c: c["combined_score"], reverse=True)
+    deal_cards = merge_duplicate_deals(deal_cards)
 
     top_deals = deal_cards[:6]
     other_deals = deal_cards[6:12]

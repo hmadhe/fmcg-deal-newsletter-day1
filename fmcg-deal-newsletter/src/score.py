@@ -19,8 +19,9 @@ import pandas as pd
 from urllib.parse import urlparse
 from config import (
     FMCG_COMPANIES, DEAL_KEYWORDS, FMCG_SECTOR_TERMS,
+    NOISE_TERMS, NOISE_PENALTY, COMPANY_NAME_EXCLUSIONS,
     DEFINITIVE_TERMS, SPECULATIVE_TERMS,
-    CREDIBILITY_TIERS, DEFAULT_CREDIBILITY,
+    CREDIBILITY_TIERS, SOURCE_NAME_TIERS, DEFAULT_CREDIBILITY,
     RELEVANCE_WEIGHT, CREDIBILITY_WEIGHT, CONFIDENCE_WEIGHT,
     INCLUDE_THRESHOLD
 )
@@ -30,30 +31,68 @@ def get_domain(url):
     return urlparse(url).netloc.replace("www.", "").lower()
 
 
+def _company_mentioned(text, company):
+    """True if `company` genuinely appears in `text` -- false if the only
+    occurrences are as part of a known unrelated same-name company (see
+    config.COMPANY_NAME_EXCLUSIONS), e.g. "ITC" matching "ITC Properties"
+    (a Hong Kong real-estate company, unrelated to the FMCG conglomerate)."""
+    company_lower = company.lower()
+    if company_lower not in text:
+        return False
+    for exclusion in COMPANY_NAME_EXCLUSIONS.get(company_lower, []):
+        if exclusion in text:
+            return False
+    return True
+
+
 def relevance_score(article):
     """
     +0.5 if a known FMCG company is named
     +0.4 if a deal keyword is present
     +0.1 if a generic sector term is present
-    Capped at 1.0. Articles scoring 0 have neither a company nor a
-    deal keyword and are almost certainly noise.
+    -0.4 if financial-report/stock-trading noise language is present
+         (e.g. "Q1 Results", "shares of", "PAT jumps") -- these frequently
+         match on company + deal-keyword despite not describing a deal.
+    Capped to [0, 1].
     """
     text = f"{article['title']} {article['snippet']}".lower()
     score = 0.0
 
-    if any(company.lower() in text for company in FMCG_COMPANIES):
+    if any(_company_mentioned(text, company) for company in FMCG_COMPANIES):
         score += 0.5
     if any(kw.lower() in text for kw in DEAL_KEYWORDS):
         score += 0.4
     if any(term.lower() in text for term in FMCG_SECTOR_TERMS):
         score += 0.1
+    if any(term in text for term in NOISE_TERMS):
+        score -= NOISE_PENALTY
 
-    return min(score, 1.0)
+    return max(0.0, min(score, 1.0))
 
 
 def credibility_score(article):
+    """
+    article["url"] is a news.google.com redirect link, not the publisher's
+    real domain, so a domain lookup against it almost never matches. Match
+    against article["source"] (Google's display name for the outlet)
+    instead -- first as a direct key (some sources already come through as
+    a bare domain, e.g. "livemint.com"), then by name substring. Domain
+    lookup is kept first in case a future ingestion source provides direct
+    publisher URLs.
+    """
     domain = get_domain(article["url"])
-    return CREDIBILITY_TIERS.get(domain, DEFAULT_CREDIBILITY)
+    if domain in CREDIBILITY_TIERS:
+        return CREDIBILITY_TIERS[domain]
+
+    source = article.get("source", "").lower().strip()
+    if source in CREDIBILITY_TIERS:
+        return CREDIBILITY_TIERS[source]
+
+    for name, tier in SOURCE_NAME_TIERS.items():
+        if name in source:
+            return tier
+
+    return DEFAULT_CREDIBILITY
 
 
 def confidence_score(article):

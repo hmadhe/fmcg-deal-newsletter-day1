@@ -121,11 +121,29 @@ if st.session_state.pipeline_ran:
     newsletter = st.session_state.newsletter
 
     st.markdown("---")
-    st.header(newsletter["title"])
-    st.caption(f"Period: {newsletter['period']}   |   Generated: {newsletter['generated_on']}")
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(135deg, #1F4E79 0%, #2E6DA4 100%);
+                    border-radius: 10px; padding: 1.75rem 2rem; margin-bottom: 1.5rem;">
+            <span style="display:inline-block; background: rgba(255,255,255,0.15); color:#ffffff;
+                        font-size:0.75rem; font-weight:600; letter-spacing:0.05em;
+                        padding:0.25rem 0.75rem; border-radius:999px; margin-bottom:0.6rem;">
+                {newsletter['period'].upper()}
+            </span>
+            <h1 style="color:#ffffff; margin:0.3rem 0 0.3rem 0; font-size:1.9rem;">{newsletter['title']}</h1>
+            <p style="color:rgba(255,255,255,0.85); margin:0; font-size:0.9rem;">
+                Generated {newsletter['generated_on']} &middot; {newsletter['total_deals_found']} deals tracked this period
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.subheader("Executive Summary")
-    st.write(newsletter["executive_summary"])
+    st.markdown("###### EXECUTIVE SUMMARY")
+    st.markdown(
+        f"<p style='font-size:1.05rem; line-height:1.6;'>{newsletter['executive_summary']}</p>",
+        unsafe_allow_html=True,
+    )
 
     st.subheader(f"Top Deals ({len(newsletter['top_deals'])})")
     if not newsletter["top_deals"]:
@@ -138,17 +156,27 @@ if st.session_state.pipeline_ran:
                 f"*{deal['deal_type'].replace('_', ' ').title()}*  |  {deal['deal_value']}"
             )
             st.write(deal["summary"])
-            caption = f"Source: {deal['source']}"
-            if deal.get("also_covered_by"):
-                caption += f" (also covered by: {', '.join(deal['also_covered_by'])})"
-            st.caption(caption)
+            n = deal["corroboration_count"]
+            st.caption(
+                f"Deal ID: {deal['deal_id']}  |  Sources: {', '.join(deal['sources'])}  |  "
+                f"Corroboration: {n} independent source{'s' if n != 1 else ''}  |  "
+                f"Confidence: {deal['confidence']}"
+            )
 
     if newsletter["other_deals"]:
         st.subheader("Other Notable Activity")
         for deal in newsletter["other_deals"]:
             st.markdown(
-                f"- **{deal['acquirer']} \u2192 {deal['target']}**: {deal['summary']} ({deal['source']})"
+                f"- **{deal['acquirer']} \u2192 {deal['target']}**: {deal['summary']} "
+                f"({', '.join(deal['sources'])})"
             )
+
+    st.markdown("---")
+    st.caption(
+        f"Sourced from {len(st.session_state.raw_articles)} raw articles \u2192 "
+        f"{len(st.session_state.deduped)} after de-duplication \u2192 "
+        f"{newsletter['total_deals_found']} deals included. Generated {newsletter['generated_on']}."
+    )
 
     # -----------------------------------------------------------------
     # Downloads
