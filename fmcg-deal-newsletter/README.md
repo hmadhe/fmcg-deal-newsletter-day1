@@ -282,26 +282,35 @@ fmcg-deal-newsletter/
 ```
 
 ## Architecture Diagram
+## Architecture
+
+                Google News RSS
+                       |
+                       v
+                  Ingestion
+             (query + fetch, no API key)
+                       |
+                       v
+              Dedup (exact + fuzzy)
+                       |
+                       v
+                   Scoring
+        (relevance, credibility, confidence)
+                       |
+                       v
+              Gemini Extraction
+             (LLM runs on shortlist only)
+                       |
+                       v
+             Newsletter Assembly
+           (merge duplicate deals + summary)
+                       |
+                       v
+             Export: Word / PowerPoint
 
 
+        Streamlit App
+   (drives the run above, shows
+   progress, offers downloads)
 
-## Architecture Diagram
 
-```mermaid
-flowchart TD
-    A[Google News RSS] --> B[Ingestion]
-    B --> C[Cleaning / De-duplication]
-    C --> D[Scoring: Relevance, Credibility, Confidence]
-    D --> E[Gemini Extraction (shortlist)]
-    E --> F[Newsletter Generation]
-    F --> G[Streamlit App / DOCX / PPTX Export]
-```
-
-## Not yet done
-
-- **Excel export** — Word and PowerPoint exports exist; a structured `.xlsx`
-  newsletter export does not yet.
-- **Architecture diagram (image)** — the pipeline diagram above is ASCII;
-  no rendered diagram file exists yet.
-- **Hosted demo link** — `app.py` runs locally / on Streamlit Cloud once
-  deployed, but no public URL is committed here yet.
