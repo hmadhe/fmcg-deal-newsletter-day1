@@ -32,22 +32,10 @@ st.caption(
 )
 
 # ---------------------------------------------------------------------------
-# Sidebar: API key + pipeline explanation
+# Sidebar: pipeline explanation
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.header("Settings")
-
-    default_key = os.environ.get("GEMINI_API_KEY", "")
-    api_key_input = st.text_input(
-        "Gemini API Key",
-        type="password",
-        value=default_key,
-        help="Get a free key at https://aistudio.google.com/apikey",
-    )
-    if api_key_input:
-        os.environ["GEMINI_API_KEY"] = api_key_input
-
-    st.markdown("---")
     st.markdown(
         "**Pipeline stages**\n\n"
         "1. Ingestion — Google News RSS\n"
@@ -75,7 +63,7 @@ run_clicked = st.button("🚀 Generate Newsletter", type="primary")
 
 if run_clicked:
     if not os.environ.get("GEMINI_API_KEY"):
-        st.error("Please enter a Gemini API key in the sidebar first.")
+        st.error("Gemini API key not found. Please set the GEMINI_API_KEY environment variable before starting the app.")
         st.stop()
 
     try:
@@ -227,4 +215,4 @@ if st.session_state.pipeline_ran:
         with tab3:
             st.dataframe(pd.DataFrame(st.session_state.scored), use_container_width=True)
 else:
-    st.info("👈 Enter your Gemini API key in the sidebar, then click **Generate Newsletter** to begin.")
+    st.info("Please set the GEMINI_API_KEY environment variable and then click **Generate Newsletter** to begin.")

@@ -42,7 +42,7 @@ NOISE_PENALTY = 0.4
 # present, that company match is not counted for this article. Extend as
 # new collisions are found. ---
 COMPANY_NAME_EXCLUSIONS = {
-    "itc": ["itc properties", "itc holdings"],
+    "itc": ["itc propertie", "itc holdings"],
 }
 
 # --- Language signals for confidence scoring ---
