@@ -25,6 +25,14 @@ from config import TOP_N_FOR_EXTRACTION
 
 st.set_page_config(page_title="FMCG Deal Intelligence Newsletter", layout="wide", page_icon="📰")
 
+# Streamlit Cloud's Secrets manager populates st.secrets, not os.environ —
+# sync it here so every os.environ.get("GEMINI_API_KEY") check below (and
+# in llm_client.py) sees the key consistently, regardless of how it's set.
+if "GEMINI_API_KEY" in st.secrets:
+    os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+
+
+
 st.title("📰 FMCG Deal Intelligence Newsletter Generator")
 st.caption(
     "Live FMCG M&A news aggregation \u2192 de-duplication \u2192 relevance/credibility "
